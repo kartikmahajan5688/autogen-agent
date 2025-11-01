@@ -59,7 +59,7 @@ manager = GroupChatManager(name="manager", groupchat=groupchat)
 
 
 def chat_response(user_input):
-    """Handles the full AI interaction flow and captures the final response."""
+    """Handles the full AI interaction flow and returns only the final recommendation."""
     try:
         # Clear old messages
         groupchat.messages.clear()
@@ -70,35 +70,35 @@ def chat_response(user_input):
             message=f"I have been feeling {user_input}. Can you help?"
         )
 
-        # Capture conversation history (may be objects, not dicts)
         messages = getattr(groupchat, "messages", [])
-
         if not messages:
             return "No messages captured from group chat."
 
-        responses = []
-        for m in messages:
-            # --- Different autogen versions have different message formats ---
-            # 1️⃣ Case: dict-based
+        # Find the *last* message from therapy_recommendation
+        final_response = None
+        for m in reversed(messages):
+            # dict-based format
             if isinstance(m, dict):
-                name = m.get("name", "Unknown")
-                content = m.get("content", "")
-                if content and name not in ["patient"]:
-                    responses.append(f"**{name}**: {content}")
+                if m.get("name") == "therapy_recommendation":
+                    final_response = m.get("content", "")
+                    break
+            # object-based format
+            elif hasattr(m, "name") and hasattr(m, "content"):
+                if m.name == "therapy_recommendation":
+                    final_response = m.content
+                    break
 
-            # 2️⃣ Case: object-based (Message class)
-            elif hasattr(m, "content") and hasattr(m, "name"):
-                if m.name != "patient":
-                    responses.append(f"**{m.name}**: {m.content}")
+        # fallback: if no therapy_recommendation message found, return last non-patient
+        if not final_response:
+            for m in reversed(messages):
+                if isinstance(m, dict) and m.get("name") != "patient":
+                    final_response = m.get("content", "")
+                    break
+                elif hasattr(m, "name") and m.name != "patient":
+                    final_response = m.content
+                    break
 
-        if responses:
-            return "\n---\n".join(responses)
-        else:
-            # fallback — use the last message if nothing else matched
-            last_msg = messages[-1] if messages else None
-            if last_msg and hasattr(last_msg, "content"):
-                return str(last_msg.content)
-            return "No AI response found."
+        return final_response or "No AI response found."
 
     except Exception as e:
         return f"⚠️ Error: {str(e)}"
@@ -129,94 +129,3 @@ with gr.Blocks(theme=gr.themes.Soft(), title="AI Mental Health Assistant") as de
 # ---- Launch the Gradio app ----
 if __name__ == "__main__":
     demo.launch()
-
-
-# from openai import OpenAI
-# from autogen import ConversableAgent, GroupChat, GroupChatManager
-# import os
-# import warnings
-# import logging
-# from dotenv import load_dotenv
-
-# # Suppress autogen and other deprecation/user warnings
-# warnings.filterwarnings("ignore", category=DeprecationWarning)
-# warnings.filterwarnings('ignore', category=UserWarning)
-
-
-# # ---- Load environment variables ----
-# load_dotenv()
-# OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-# MODEL_ID = os.getenv("MODEL_ID")
-# print("MODEL_ID-->", MODEL_ID)
-
-# # Suppress warnings from autogen.oai.client
-# logging.getLogger("autogen.oai.client").setLevel(logging.ERROR)
-
-
-# # Initialize OpenAI Client (API Key is automatically managed from environment variables or configured in OpenAI settings)
-# client = OpenAI()
-
-# # Sample LLM Configuration (Replace with actual API keys/config if needed)
-# # Replace with real API key
-# llm_config = {"config_list": [{"model": MODEL_ID, "api_key": OPENAI_API_KEY}]}
-
-
-# # Create AI Agents with distinct roles
-# patient_agent = ConversableAgent(
-#     name="patient",
-#     system_message="You describe your emotions and mental health concerns.",
-#     llm_config=llm_config
-# )
-
-# emotion_analysis_agent = ConversableAgent(
-#     name="emotion_analysis",
-#     system_message="You analyze the user's emotions based on their input."
-#                    "Do not provide treatment or self-care advice."
-#                    "Instead, just summarize the dominant emotions they may be experiencing.",
-#     llm_config=llm_config
-# )
-
-# therapy_recommendation_agent = ConversableAgent(
-#     name="therapy_recommendation",
-#     system_message="You suggest relaxation techniques and self-care methods"
-#                    "only based on the analysis from the Emotion Analysis Agent."
-#                    "Do not analyze emotions—just give recommendations based on the prior response.",
-#     llm_config=llm_config
-# )
-
-# # Create GroupChat for AI Agents
-# groupchat = GroupChat(
-#     agents=[emotion_analysis_agent, therapy_recommendation_agent],
-#     messages=[],
-#     max_round=3,  # Ensures the conversation does not stop too early
-#     speaker_selection_method="round_robin"
-# )
-
-# # Create GroupChatManager
-# manager = GroupChatManager(name="manager", groupchat=groupchat)
-
-# # Function to start the chatbot interaction
-
-
-# def start_mental_health_chat():
-#     """Runs a chatbot for mental health support with distinct agent roles."""
-#     print("\nWelcome to the AI Mental Health Chatbot!")
-#     user_feelings = input("How are you feeling today?")
-
-#     # Initiate conversation
-#     print("\nAnalyzing emotions...")
-#     response = patient_agent.initiate_chat(
-#         manager,
-#         message=f"I have been feeling {user_feelings}. Can you help?"
-#     )
-
-#     # Ensure the therapy agent gets triggered
-#     if not response:  # If the initial response is empty, retry with explicit therapy agent prompt
-#         response = therapy_recommendation_agent.initiate_chat(
-#             manager,
-#             message="Based on the user's emotions, please provide therapy recommendations."
-#         )
-
-
-# # Run the chatbot
-# start_mental_health_chat()
