@@ -128,4 +128,11 @@ with gr.Blocks(theme=gr.themes.Soft(), title="AI Mental Health Assistant") as de
 
 # ---- Launch the Gradio app ----
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=int(os.environ.get("PORT", 7860))
+    )
+
+
+# if __name__ == "__main__":
+#     demo.launch()
